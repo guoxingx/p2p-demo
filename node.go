@@ -20,16 +20,18 @@ type ConnMessage struct {
 	Conn      *net.TCPConn
 }
 
+// NewNode creates a new node
 func NewNode(port string) *Node {
 	addr, _ := net.ResolveTCPAddr("tcp", fmt.Sprintf("localhost:%s", port))
 	return &Node{addr, map[string]*net.TCPConn{}}
 }
 
+// SendRandMessage simulate message sending in tcp connections
 func (node *Node) SendRandMessage() {
 	for {
 		time.Sleep(time.Second)
 		randInt := rand.Intn(100)
-		if randInt < 30 {
+		if randInt < 20 {
 			fmt.Printf("ready to send message...(%v rolled)\n", randInt)
 			for _, conn := range node.Connected {
 				conn.Write([]byte(fmt.Sprintf("%v from %v", randInt, node.Address)))
@@ -38,6 +40,7 @@ func (node *Node) SendRandMessage() {
 	}
 }
 
+// Run starts to accept tcp connections.
 func (node *Node) Run() {
 	listener, err := net.ListenTCP("tcp", node.Address)
 	if err != nil {
@@ -46,8 +49,9 @@ func (node *Node) Run() {
 	defer listener.Close()
 	fmt.Println("node start at ", node.Address)
 
-	// connChan := make(chan *net.TCPConn)
+	// connection message channel
 	connChan := make(chan *ConnMessage)
+	// data channel
 	dataChan := make(chan []byte)
 
 	go ListenConnections(listener, connChan, dataChan)
@@ -56,10 +60,12 @@ func (node *Node) Run() {
 		select {
 		case connMessage := <-connChan:
 			if connMessage.Connected {
+				// new connection, insert into node.Connected
 				node.Connected[connMessage.Conn.RemoteAddr().String()] = connMessage.Conn
 				fmt.Printf("connect from %v\n", connMessage.Conn.RemoteAddr())
 				fmt.Printf("current connected: %v\n", node.Connected)
 			} else {
+				// lost connect, remove from node.Connected
 				delete(node.Connected, connMessage.Conn.RemoteAddr().String())
 				fmt.Printf("disconnect from %v\n", connMessage.Conn.RemoteAddr())
 				fmt.Printf("current connected: %v\n", node.Connected)
@@ -77,6 +83,8 @@ func (node *Node) Connect(raddr *net.TCPAddr) {
 		return
 	}
 	defer conn.Close()
+
+	// new connection, insert into node.Connected
 	node.Connected[conn.RemoteAddr().String()] = conn
 	fmt.Printf("connect to %v\n", conn.RemoteAddr())
 	fmt.Printf("current connected: %v\n", node.Connected)
@@ -86,7 +94,7 @@ func (node *Node) Connect(raddr *net.TCPAddr) {
 		n, err := conn.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				fmt.Printf("%v disconnected.\n", raddr)
+				// lost connect, remove from node.Connected
 				delete(node.Connected, conn.RemoteAddr().String())
 				fmt.Printf("disconnect to %v\n", conn.RemoteAddr())
 				fmt.Printf("current connected: %v\n", node.Connected)
